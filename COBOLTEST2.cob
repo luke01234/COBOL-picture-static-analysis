@@ -1,0 +1,28 @@
+121312*PARSER IGNORES THIS
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. COBOLTEST2-SIZE-AND-TYPE-MISMATCH.
+       AUTHOR. Luke Attard.
+       DATE-WRITTEN. 12/5/2025.
+       
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+
+       01  WS-VAR1             PIC 9(1) VALUE 1.
+       01  WS-VAR2             PIC 9(2) VALUE 36.
+       01  WS-VAR3             PIC 9(3) VALUE 100.
+       01  WS-VAR4             PIC Z(3) VALUE 200.
+
+       PROCEDURE DIVISION.
+      *PARSER SHOULD IGNORE THIS
+       MOVE WS-VAR1 TO WS-VAR2.
+      *UNSAFE MOVE
+       MOVE WS-VAR3 TO WS-VAR1.
+      *UNSAFE MOVE
+       MOVE WS-VAR3 TO WS-VAR4. 
+       
+       DISPLAY WS-VAR1.
+       DISPLAY WS-VAR2.
+       DISPLAY WS-VAR3.
+       DISPLAY WS-VAR4.
+       
+       STOP RUN.
