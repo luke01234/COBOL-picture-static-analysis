@@ -16,27 +16,31 @@
               05 WS-CHARS PIC X(256).
  
        LOCAL-STORAGE SECTION.
-           01 LO-DYNAMIC-FILE             PIC X(256).
-           01 LO-EOF                   PIC X VALUE "N".
-           01 LO-TOKEN                 PIC X(80).
-           01 LO-POINTER               PIC 9(4) VALUE 1.
-           01 LO-INDEX                 PIC 9(4) VALUE 1.
-           01 LO-DONE                  PIC X VALUE "N".
-           01 LO-TEMP-VAR1             PIC X(256).
-           01 LO-TEMP-NUM1             PIC 9(3).
+           01 LO-DYNAMIC-FILE         PIC X(256).
+           01 LO-EOF                  PIC X VALUE "N".
+           01 LO-POINTER              PIC 9(4) VALUE 1.
+           01 LO-TRIMMED-CHARS        PIC X(80).
+           01 LO-ARRAY-INDEX          PIC 9(4) VALUE 1.
+           01 LO-LINE-INDEX           PIC 9(4) VALUE 1.
+           01 LO-LINE-LENGTH          PIC 9(4) VALUE 1.
+           01 LO-TOKEN-INDEX          PIC 9(4) VALUE 1.
+           01 LO-TOKEN                PIC X(80).
+           01 LO-STOP-CHAR            PIC X(1) VALUE SPACE.
+           01 LO-TEMP-VAR1            PIC X(256).
+           01 LO-TEMP-NUM1            PIC 9(3).
        LINKAGE SECTION. 
-           01 LI-CMD-ARG                  PIC X(256).
+           01 LI-CMD-ARG              PIC X(256).
            01 LI-AST.
                05 LI-AST-NODES OCCURS 10000 TIMES.
                    10 LI-AST-NODE         PIC X(80).
                
 
        PROCEDURE DIVISION USING LI-CMD-ARG LI-AST.
+      *PROCEDURE DIVISION.
 
       *Read command-line argument (filename)
        PERFORM READ-FILE-PARA.
       *PERFORM DISPLAY-ARRAY-PARA.
-
       *STOP RUN. TURNS OUT THIS IS A BAD IDEA, USE EXIT PROGRAM INSTEAD
        EXIT PROGRAM.
        
@@ -55,46 +59,81 @@
                 AT END     
                 MOVE "Y" TO LO-EOF
                 NOT AT END 
-                MOVE "N" TO LO-DONE
+                MOVE "N" TO LO-EOF
                 MOVE 1 TO LO-POINTER
            END-READ
 
       *CHECK TO SEE IF THE LINE IS A COMMENT OR NOT
-           IF WS-CHARS(7:1) <> "*"
-      *READ EACH LINE AND SPLIT THEM UP BY PERIODS
-                PERFORM UNTIL LO-DONE = "Y"
-                   UNSTRING WS-CHARS
-                       DELIMITED BY SPACE
-                       INTO LO-TOKEN
-                       WITH POINTER LO-POINTER
-                       NOT ON OVERFLOW MOVE "Y" TO LO-DONE
-                   END-UNSTRING
-      *            DISPLAY WS-TOKEN
+           IF WS-CHARS(7:1) <> "*" AND LO-EOF <> "Y"
+      *
+               MOVE FUNCTION LENGTH(FUNCTION TRIM(WS-CHARS)) TO 
+               LO-LINE-LENGTH
+               MOVE 1 TO LO-LINE-INDEX
+               MOVE 1 TO LO-TOKEN-INDEX
+               MOVE SPACE TO LO-TOKEN
+               MOVE SPACE TO LO-STOP-CHAR
+      *        DISPLAY WS-CHARS
 
-      *ADD EACH TOKEN TO THE "AST"
-                   IF LO-TOKEN NOT = SPACE
-      *                SANITIZE THE TOKENS BEFORE SAVING THEM
-                       MOVE FUNCTION TRIM(LO-TOKEN) TO LO-TOKEN
-                       MOVE FUNCTION UPPER-CASE(LO-TOKEN) TO LO-TOKEN
-                       
-      *                REMOVE TRAILING PERIODS
-                       COMPUTE LO-TEMP-NUM1 = 
-                       FUNCTION LENGTH(FUNCTION TRIM(LO-TOKEN))
-      *                USING THE LENGTH CHECK TO SEE IF IT ENDS WITH A PERIOD
-                       IF LO-TOKEN(LO-TEMP-NUM1:1) = "."
-      *                    CUT OUT THE LAST CHARACTER
-                           MOVE LO-TOKEN(1 : LO-TEMP-NUM1 - 1) 
-                           TO LO-TOKEN
-                       END-IF
-
-                       MOVE LO-TOKEN TO LI-AST-NODE(LO-INDEX)
-                       ADD 1 TO LO-INDEX
+               PERFORM UNTIL LO-LINE-INDEX > LO-LINE-LENGTH
+                  MOVE FUNCTION TRIM(WS-CHARS) TO 
+                  LO-TRIMMED-CHARS
+                  
+                  IF LO-TRIMMED-CHARS(LO-LINE-INDEX:1) =
+                  LO-STOP-CHAR
+                  
+                   IF LO-STOP-CHAR <> SPACE
+                    MOVE LO-STOP-CHAR TO LO-TOKEN(LO-TOKEN-INDEX:1)
                    END-IF
-                END-PERFORM
+
+                   PERFORM SAVE-TOKEN-PARA
+                  
+                  ELSE
+                  
+                   IF LO-TRIMMED-CHARS(LO-LINE-INDEX:1) = '"'
+                   AND LO-STOP-CHAR = SPACE
+                       MOVE '"' TO LO-STOP-CHAR
+                   END-IF
+                  
+                   IF LO-TRIMMED-CHARS(LO-LINE-INDEX:1) = "'"
+                   AND LO-STOP-CHAR = SPACE
+                       MOVE "'" TO LO-STOP-CHAR
+                   END-IF
+                   
+                   MOVE LO-TRIMMED-CHARS(LO-LINE-INDEX:1) TO 
+                   LO-TOKEN(LO-TOKEN-INDEX:1)
+                   ADD 1 TO LO-TOKEN-INDEX
+
+                  END-IF
+
+                  ADD 1 TO LO-LINE-INDEX
+               
+               END-PERFORM
+
+               PERFORM SAVE-TOKEN-PARA
+
            END-IF
+           
        END-PERFORM.
        
        CLOSE INPUTFILE.
+       
+       SAVE-TOKEN-PARA.
+       IF FUNCTION LENGTH(FUNCTION TRIM(LO-TOKEN)) > 0
+      *    DISPLAY LO-TOKEN " AND " LO-EOF
+           COMPUTE LO-TEMP-NUM1 = 
+           FUNCTION LENGTH(FUNCTION TRIM(LO-TOKEN))
+      *    USING THE LENGTH CHECK TO SEE IF IT ENDS WITH A PERIOD
+           IF LO-TOKEN(LO-TEMP-NUM1:1) = "."
+      *      CUT OUT THE LAST CHARACTER
+             MOVE LO-TOKEN(1 : LO-TEMP-NUM1 - 1) 
+             TO LO-TOKEN
+           END-IF
+           MOVE LO-TOKEN TO LI-AST-NODE(LO-ARRAY-INDEX)
+           ADD 1 TO LO-ARRAY-INDEX
+           MOVE 1 TO LO-TOKEN-INDEX
+           MOVE SPACE TO LO-TOKEN
+           MOVE SPACE TO LO-STOP-CHAR
+       END-IF.
 
        DISPLAY-ARRAY-PARA.
        MOVE 1 TO LO-TEMP-NUM1.
@@ -106,3 +145,4 @@
        END-PERFORM.
 
        END PROGRAM PARSER.
+
